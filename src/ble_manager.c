@@ -23,6 +23,8 @@ static const ble_uuid128_t gatt_char_uuid =
 static uint16_t s_pt100_char_val_handle;
 static uint16_t s_conn_handle = BLE_HS_CONN_HANDLE_NONE;
 
+static int ble_gap_event_cb(struct ble_gap_event *event, void *arg);
+
 // GAP Hirdetés elindítása
 static void ble_app_advertise(void)
 {
@@ -30,8 +32,8 @@ static void ble_app_advertise(void)
     memset(&fields, 0, sizeof(fields));
 
     fields.flags = BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP;
-    fields.name = (uint8_t *)"ESP32C3_PT100";
-    fields.name_len = strlen("ESP32C3_PT100");
+    fields.name = (uint8_t *)"ESP32-C3 Super Mini";
+    fields.name_len = strlen("ESP32-C3 Super Mini");
     fields.name_is_complete = 1;
 
     ble_gap_adv_set_fields(&fields);
@@ -41,8 +43,8 @@ static void ble_app_advertise(void)
     adv_params.conn_mode = BLE_GAP_CONN_MODE_UND;
     adv_params.disc_mode = BLE_GAP_DISC_MODE_GEN;
 
-    ble_gap_adv_start(0, NULL, BLE_HS_FOREVER, &adv_params, NULL, NULL);
-    ESP_LOGI(TAG, "BLE hirdetes elinditva: ESP32C3_PT100");
+    ble_gap_adv_start(0, NULL, BLE_HS_FOREVER, &adv_params, ble_gap_event_cb, NULL);
+    ESP_LOGI(TAG, "BLE hirdetes elinditva: ESP32-C3 Super Mini");
 }
 
 // GAP Eseménykezelő (Csatlakozás / Szétkapcsolás)

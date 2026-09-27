@@ -31,7 +31,7 @@ void app_main(void)
 
     while (1)
     {
-        wifi_pt100_data_t wifi_data;
+        wifi_packet_t wifi_data;
 
         for (int i = 0; i < PT100_COUNT; i++)
         {
@@ -40,18 +40,18 @@ void app_main(void)
             if (sensors[i].is_faulty)
             {
                 ESP_LOGE(TAG, "Szenzor [%d] HIBÁS!", i);
-                wifi_data.temperatures[i] = -999.0f;
+                wifi_data.payload.pt100.temperatures[i] = -999.0f;
             }
             else
             {
                 ESP_LOGI(TAG, "Szenzor [%d] Temp: %.2f °C", i, sensors[i].temperature);
-                wifi_data.temperatures[i] = sensors[i].temperature;
+                wifi_data.payload.pt100.temperatures[i] = sensors[i].temperature;
             }
-            wifi_data.is_faulty[i] = sensors[i].is_faulty;
+            wifi_data.payload.pt100.is_faulty[i] = sensors[i].is_faulty;
         }
 
         // 4. Adatküldés ESP-NOW-val
-        wifi_manager_send_data(&wifi_data, NULL);
+        wifi_manager_send_packet(&wifi_data);
 
         vTaskDelay(pdMS_TO_TICKS(2000));
     }

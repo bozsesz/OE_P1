@@ -25,15 +25,12 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-    ESP_LOGI(TAG, "nvs_init done...");
 
     // 2. Wi-Fi STA + UDP init
     ESP_ERROR_CHECK(wifi_manager_init());
-    ESP_LOGI(TAG, "wifi_init done...");
 
     // 3. Szenzorok init
     max31865_init_all(sensors, PT100_COUNT);
-    ESP_LOGI(TAG, "sensor_init done...");
 
     while (1)
     {
@@ -58,7 +55,6 @@ void app_main(void)
             }
         }
 
-        ESP_LOGI(TAG, "Lefutott az egesz inti ciklus...");
         wifi_manager_send_json("{\"status\":\"ALIVE\"}");
 
         // 4. JSON formátumú üzenet összeállítása az UDP küldéshez

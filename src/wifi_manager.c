@@ -1,57 +1,126 @@
 #include "wifi_manager.h"
 #include <string.h>
 #include "esp_wifi.h"
-#include "esp_now.h"
+#include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "lwip/sockets.h"
+#include "lwip/sys.h"
+#include <lwip/netdb.h>
+
+#define EXAMPLE_ESP_WIFI_SSID "MechatroMotive"  // Írd ide a Wi-Fi / Hotspot nevét
+#define EXAMPLE_ESP_WIFI_PASS "m3chatro_K4kukk" // Írd ide a jelszót
+#define UDP_PORT 4210                           // A Node-RED udp in portja
 
 static const char *TAG = "WIFI_MANAGER";
-static const uint8_t s_broadcast_mac[ESP_NOW_ETH_ALEN] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+static int s_udp_socket = -1;
+static struct sockaddr_in s_dest_addr;
+static bool s_connected = false;
 
-static void wifi_manager_send_cb(const esp_now_send_info_t *tx_info, esp_now_send_status_t status)
+// Event handler a Wi-Fi és IP események kezelésére
+static void wifi_event_handler(void *arg, esp_event_base_t event_base,
+                               int32_t event_id, void *event_data)
 {
-    if (status != ESP_NOW_SEND_SUCCESS) {
-        ESP_LOGE(TAG, "ESP-NOW csomag kuldes sikertelen!");
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
+    {
+        esp_wifi_connect();
+        ESP_LOGI(TAG, "Wi-Fi elindítva, csatlakozás folyamatban...");
     }
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
+    {
+        s_connected = false;
+        ESP_LOGW(TAG, "Wi-Fi kapcsolat megszakadt, újracsatlakozás...");
+        esp_wifi_connect();
+    }
+    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
+    {
+        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+        ESP_LOGI(TAG, "Sikeres csatlakozás! Kiosztott IP cím: " IPSTR, IP2STR(&event->ip_info.ip));
+        s_connected = true;
+    }
+}
+
+// UDP Socket előkészítése broadcast küldésre
+static void init_udp_socket(void)
+{
+    s_udp_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (s_udp_socket < 0)
+    {
+        ESP_LOGE(TAG, "Nem sikerült létrehozni az UDP socket-et!");
+        return;
+    }
+
+    // Broadcast engedélyezése a socketen
+    int broadcast_permission = 1;
+    setsockopt(s_udp_socket, SOL_SOCKET, SO_BROADCAST, (void *)&broadcast_permission, sizeof(broadcast_permission));
+
+    // Célcím beállítása (255.255.255.255:4210)
+    memset(&s_dest_addr, 0, sizeof(s_dest_addr));
+    s_dest_addr.sin_family = AF_INET;
+    s_dest_addr.sin_port = htons(UDP_PORT);
+    s_dest_addr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
 }
 
 esp_err_t wifi_manager_init(void)
 {
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+
+    // Eseménykezelők regisztrálása
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
+                                                        ESP_EVENT_ANY_ID,
+                                                        &wifi_event_handler,
+                                                        NULL,
+                                                        NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
+                                                        IP_EVENT_STA_GOT_IP,
+                                                        &wifi_event_handler,
+                                                        NULL,
+                                                        NULL));
+
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = EXAMPLE_ESP_WIFI_SSID,
+            .password = EXAMPLE_ESP_WIFI_PASS,
+        },
+    };
+
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    esp_err_t ret = esp_now_init();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "ESP-NOW init hiba: %s", esp_err_to_name(ret));
-        return ret;
-    }
+    init_udp_socket();
 
-    ESP_ERROR_CHECK(esp_now_register_send_cb(wifi_manager_send_cb));
-
-    esp_now_peer_info_t peer_info = {};
-    memcpy(peer_info.peer_addr, s_broadcast_mac, ESP_NOW_ETH_ALEN);
-    peer_info.channel = 0;
-    peer_info.encrypt = false;
-
-    if (!esp_now_is_peer_exist(s_broadcast_mac)) {
-        ret = esp_now_add_peer(&peer_info);
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "Broadcast peer hozzaadasi hiba: %s", esp_err_to_name(ret));
-            return ret;
-        }
-    }
-
-    ESP_LOGI(TAG, "Wi-Fi (ESP-NOW) sikeresen inicializalva.");
     return ESP_OK;
 }
 
-esp_err_t wifi_manager_send_packet(const wifi_packet_t *packet)
+// Tetszőleges szöveges (JSON) adat kiküldése UDP Broadcast-on
+esp_err_t wifi_manager_send_json(const char *json_string)
 {
-    return esp_now_send(s_broadcast_mac, (const uint8_t *)packet, sizeof(wifi_packet_t));
+    if (!s_connected)
+    {
+        ESP_LOGW(TAG, "Nincs Wi-Fi kapcsolat, UDP csomag nem küldhető.");
+        return ESP_FAIL;
+    }
+
+    if (s_udp_socket < 0)
+    {
+        init_udp_socket();
+    }
+
+    int err = sendto(s_udp_socket, json_string, strlen(json_string), 0,
+                     (struct sockaddr *)&s_dest_addr, sizeof(s_dest_addr));
+
+    if (err < 0)
+    {
+        ESP_LOGE(TAG, "Hiba az UDP Broadcast küldésekor: errno %d", errno);
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "UDP csomag sikeresen elküldve (255.255.255.255:%d)", UDP_PORT);
+    return ESP_OK;
 }

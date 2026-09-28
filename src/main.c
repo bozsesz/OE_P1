@@ -1,4 +1,5 @@
 #include "MAX31865.h"
+#include "can_manager.h"
 #include "wifi_manager.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
@@ -11,7 +12,7 @@ static const char *TAG = "MAIN";
 static max31865_dev_t sensors[PT100_COUNT] = {
     {.cs_pin = GPIO_NUM_7},
     {.cs_pin = GPIO_NUM_8},
-    //{.cs_pin = GPIO_NUM_9},
+    {.cs_pin = GPIO_NUM_9},
     {.cs_pin = GPIO_NUM_10}};
 
 void app_main(void)
@@ -29,7 +30,10 @@ void app_main(void)
     // 2. Wi-Fi STA + UDP init
     ESP_ERROR_CHECK(wifi_manager_init());
 
-    // 3. Szenzorok init
+    // 3. CAN bus init
+    ESP_ERROR_CHECK(can_manager_init());
+
+    // 4. Szenzorok init
     max31865_init_all(sensors, PT100_COUNT);
 
     while (1)

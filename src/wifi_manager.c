@@ -8,8 +8,10 @@
 #include "lwip/sys.h"
 #include <lwip/netdb.h>
 
-#define EXAMPLE_ESP_WIFI_SSID "MechatroMotive"  // Írd ide a Wi-Fi / Hotspot nevét
-#define EXAMPLE_ESP_WIFI_PASS "m3chatro_K4kukk" // Írd ide a jelszót
+//#define EXAMPLE_ESP_WIFI_SSID "MechatroMotive"  // Írd ide a Wi-Fi / Hotspot nevét
+//#define EXAMPLE_ESP_WIFI_PASS "m3chatro_K4kukk" // Írd ide a jelszót
+#define EXAMPLE_ESP_WIFI_SSID "One-14BB"  // Írd ide a Wi-Fi / Hotspot nevét
+#define EXAMPLE_ESP_WIFI_PASS "MeTE6pegNgA87RJm" // Írd ide a jelszót
 #define UDP_PORT 4210                           // A Node-RED udp in portja
 
 static const char *TAG = "WIFI_MANAGER";

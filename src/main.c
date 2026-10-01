@@ -27,6 +27,30 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
     ESP_LOGI(TAG, "nvs_init done...");
 
+    char wifi_ssid[32] = {0};
+    char wifi_pass[32] = {0};
+    esp_err_t wifi_status;
+
+    // 2. Ciklus: addig kéri be az adatokat, amíg a csatlakozás nem sikeres
+    do
+    {
+        // Wi-Fi adatok bekérése
+        get_wifi_credentials(wifi_ssid, wifi_pass);
+
+        ESP_LOGI(TAG, "Csatlakozási kísérlet a következő hálózathoz: %s...", wifi_ssid);
+
+        // Megpróbálunk csatlakozni
+        wifi_status = wifi_manager_init(wifi_ssid, wifi_pass);
+
+        // Ha a csatlakozás nem sikerült
+        if (wifi_status != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Téves wifi ssid vagy jelszó! Kérlek, próbáld újra.");
+            vTaskDelay(pdMS_TO_TICKS(1000)); // 1 másodperc várakozás az újabb próbálkozás előtt
+        }
+
+    } while (wifi_status != ESP_OK);
+
     // 2. Wi-Fi STA + UDP init
     ESP_ERROR_CHECK(wifi_manager_init());
     ESP_LOGI(TAG, "wifi_init done...");

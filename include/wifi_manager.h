@@ -38,7 +38,7 @@ typedef struct
     } payload;
 } wifi_packet_t;
 
-esp_err_t wifi_manager_init(void);
+esp_err_t wifi_manager_init(char *wifi_ssid, char *wifi_pass);
 esp_err_t wifi_manager_send_json(const char *json_string);
 
 #endif // WIFI_MANAGER_H

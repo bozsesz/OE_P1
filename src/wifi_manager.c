@@ -7,10 +7,9 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include <lwip/netdb.h>
+#include "wifi_credentials.h"
 
-#define EXAMPLE_ESP_WIFI_SSID "MechatroMotive"  // Írd ide a Wi-Fi / Hotspot nevét
-#define EXAMPLE_ESP_WIFI_PASS "m3chatro_K4kukk" // Írd ide a jelszót
-#define UDP_PORT 4210                           // A Node-RED udp in portja
+#define UDP_PORT 4210 // A Node-RED udp in portja
 
 static const char *TAG = "WIFI_MANAGER";
 static int s_udp_socket = -1;
@@ -84,8 +83,8 @@ esp_err_t wifi_manager_init(void)
 
     wifi_config_t wifi_config = {
         .sta = {
-            .ssid = EXAMPLE_ESP_WIFI_SSID,
-            .password = EXAMPLE_ESP_WIFI_PASS,
+            .ssid = WIFI_SSID,
+            .password = WIFI_PASS,
         },
     };
 

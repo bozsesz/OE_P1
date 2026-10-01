@@ -5,3 +5,4 @@
 .vscode/ipch
 .vscode/
 sdkconfig.esp32-c3-devkitm-1
+include/wifi_credentials.h

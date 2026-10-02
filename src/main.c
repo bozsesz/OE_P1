@@ -31,7 +31,7 @@ static esp_err_t read_wifi_password(char password[WIFI_PASSWORD_MAX_LEN + 1])
         }
     }
 
-    ESP_LOGI(TAG, "Enter Wi-Fi password for One-14BB, then press Enter:");
+    ESP_LOGI(TAG, "Enter Wi-Fi password for your Wifi, then press Enter:");
 
     size_t password_len = 0;
     bool password_too_long = false;
@@ -103,7 +103,6 @@ static esp_err_t read_wifi_password(char password[WIFI_PASSWORD_MAX_LEN + 1])
 void app_main(void)
 {
     vTaskDelay(pdMS_TO_TICKS(2000));
-    ESP_LOGI(TAG, "app_main started.");
     // 1. NVS flash init
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)

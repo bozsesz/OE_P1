@@ -3,4 +3,4 @@
 
 FILE(GLOB_RECURSE app_sources ${CMAKE_SOURCE_DIR}/src/*.*)
 
-idf_component_register(SRCS "main.c" "MAX31865.c" "wifi_manager.c" "can_manager.c" INCLUDE_DIRS "../include" REQUIRES bt nvs_flash)
+idf_component_register(SRCS "main.c" "MAX31865.c" "wifi_manager.c" "can_manager.c" INCLUDE_DIRS "../include" REQUIRES esp_wifi esp_http_client nvs_flash)

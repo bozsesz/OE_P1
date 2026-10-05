@@ -5,7 +5,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <stdio.h>
-#include "esp_http_client.h"
 
 static const char *TAG = "MAIN";
 

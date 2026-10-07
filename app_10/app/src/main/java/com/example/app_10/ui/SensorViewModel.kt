@@ -78,21 +78,26 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun isTemperatureOutofBounds(temp: Float): Boolean {
-        return temp < -40f || temp > 400f || temp.isNaN() || temp == -999.0f
+        return temp < -40f || temp > 400f || temp.isNaN()
     }
 
     private fun startListening() {
         viewModelScope.launch {
-            udpReceiver.listenForSensorData().collect { incomingMap ->
-                if (incomingMap.isNotEmpty()) {
-                    _connectionStatus.value = "Active Wi-Fi Broadcast Received (${incomingMap.size} Sensors)"
+            udpReceiver.listenForSensorData().collect { packet ->
+                val incomingTemps = packet.temperatures
+                val incomingFaults = packet.faults
+
+                if (incomingTemps.isNotEmpty()) {
+                    _connectionStatus.value = "Active Wi-Fi Broadcast Received (${incomingTemps.size} Sensors)"
 
                     val updatedReadings = _sensorReadings.value.toMutableMap()
                     val updatedFaults = _faultySensors.value.toMutableSet()
 
-                    incomingMap.forEach { (sensorId, temp) ->
+                    incomingTemps.forEach { (sensorId, temp) ->
                         updatedReadings[sensorId] = temp
-                        if (isTemperatureOutofBounds(temp)) {
+                        val isFaultFlag = incomingFaults[sensorId] ?: false
+
+                        if (isFaultFlag || isTemperatureOutofBounds(temp)) {
                             updatedFaults.add(sensorId)
                         } else {
                             updatedFaults.remove(sensorId)
@@ -104,7 +109,7 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
 
                     // Update history for healthy sensors
                     val updatedHistory = _sensorHistory.value.toMutableMap()
-                    incomingMap.forEach { (sensorId, temp) ->
+                    incomingTemps.forEach { (sensorId, temp) ->
                         if (!updatedFaults.contains(sensorId)) {
                             val currentList = updatedHistory[sensorId] ?: emptyList()
                             val newList = (currentList + temp).takeLast(10)

@@ -12,6 +12,11 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetSocketAddress
 
+data class SensorPacket(
+    val temperatures: Map<Int, Float>,
+    val faults: Map<Int, Boolean>
+)
+
 class Esp32UdpReceiver(
     private val context: Context,
     private val port: Int = 5005
@@ -20,14 +25,13 @@ class Esp32UdpReceiver(
 
     /**
      * Listens continuously for UDP broadcast JSON packets on the Wi-Fi network.
-     * Yields Map<Int, Float> mapping Sensor ID (1..6) -> Temperature value in °C.
+     * Yields SensorPacket containing temperatures and fault flags for PT100 sensors.
      */
-    fun listenForSensorData(): Flow<Map<Int, Float>> = flow {
+    fun listenForSensorData(): Flow<SensorPacket> = flow {
         var socket: DatagramSocket? = null
         var multicastLock: WifiManager.MulticastLock? = null
 
         try {
-            // Acquire Wi-Fi Multicast lock to ensure broadcast UDP packets are not dropped by Android OS
             val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
             multicastLock = wifiManager?.createMulticastLock("Esp32UdpMulticastLock")?.apply {
                 setReferenceCounted(true)
@@ -49,9 +53,9 @@ class Esp32UdpReceiver(
                 val jsonString = String(packet.data, 0, packet.length, Charsets.UTF_8).trim()
                 Log.d(TAG, "Received packet from ${packet.address.hostAddress}: $jsonString")
 
-                val parsedSensors = parseEsp32Json(jsonString)
-                if (parsedSensors.isNotEmpty()) {
-                    emit(parsedSensors)
+                val sensorPacket = parseEsp32Json(jsonString)
+                if (sensorPacket.temperatures.isNotEmpty()) {
+                    emit(sensorPacket)
                 }
             }
         } catch (e: Exception) {
@@ -70,50 +74,66 @@ class Esp32UdpReceiver(
 
     /**
      * Parses incoming JSON packet from ESP32-C3.
-     * Supports flexible JSON formats:
-     * - {"pt100_1": 24.5, "pt100_2": 31.0, "pt100_3": 45.2}
-     * - {"device": "esp32_1", "sensors": [24.5, 31.0, 45.2]}
-     * - {"sensor_id": 1, "temperature": 24.5}
+     * Native support for:
+     * {
+     *   "dev": "ESP32_C3_01",
+     *   "temps": [24.50, 31.00, 45.20, 18.00],
+     *   "faults": [false, false, true, false]
+     * }
      */
-    private fun parseEsp32Json(jsonString: String): Map<Int, Float> {
-        val sensorMap = mutableMapOf<Int, Float>()
+    private fun parseEsp32Json(jsonString: String): SensorPacket {
+        val tempMap = mutableMapOf<Int, Float>()
+        val faultMap = mutableMapOf<Int, Boolean>()
+
         try {
             val json = JSONObject(jsonString)
 
-            // Format 1: Direct key-value like {"pt100_1": 24.5, "pt100_2": 31.0, ...} or {"sensor1": 24.5}
-            for (i in 1..6) {
-                val keysToTry = listOf("pt100_$i", "sensor_$i", "sensor$i", "temp_$i", "s$i", "$i")
-                for (key in keysToTry) {
-                    if (json.has(key)) {
-                        sensorMap[i] = json.getDouble(key).toFloat()
-                        break
-                    }
-                }
+            // Determine starting sensor ID based on "start_id" or "dev" name
+            val devName = json.optString("dev", "ESP32_C3_01")
+            var startOffset = json.optInt("start_id", json.optInt("start_index", -1))
+
+            if (startOffset == -1) {
+                startOffset = if (devName.contains("02") || devName.endsWith("2")) 5 else 1
             }
 
-            // Format 2: Array format like {"sensors": [24.5, 31.0, 45.2, ...]}
-            if (sensorMap.isEmpty() && json.has("sensors")) {
-                val array = json.getJSONArray("sensors")
-                val startOffset = json.optInt("start_index", 1) // Handles ESP32 #1 (1..3) and ESP32 #2 (4..6)
-                for (i in 0 until array.length()) {
+            // 1. Array Format with "temps" and "faults"
+            if (json.has("temps")) {
+                val tempsArray = json.getJSONArray("temps")
+                val faultsArray = if (json.has("faults")) json.getJSONArray("faults") else null
+
+                for (i in 0 until tempsArray.length()) {
                     val sensorId = startOffset + i
                     if (sensorId in 1..6) {
-                        sensorMap[sensorId] = array.getDouble(i).toFloat()
+                        val temp = tempsArray.getDouble(i).toFloat()
+                        val isFault = faultsArray?.optBoolean(i, false) ?: (temp < -40f || temp > 400f)
+
+                        tempMap[sensorId] = temp
+                        faultMap[sensorId] = isFault
                     }
                 }
             }
 
-            // Format 3: Single sensor format like {"sensor_id": 1, "temperature": 24.5}
-            if (sensorMap.isEmpty() && (json.has("sensor_id") || json.has("id"))) {
-                val id = json.optInt("sensor_id", json.optInt("id", -1))
-                val tempKey = if (json.has("temperature")) "temperature" else "temp"
-                if (id in 1..6 && json.has(tempKey)) {
-                    sensorMap[id] = json.getDouble(tempKey).toFloat()
+            // 2. Fallback Key-Value Format like {"pt100_1": 24.5, "pt100_1_fault": false}
+            if (tempMap.isEmpty()) {
+                for (i in 1..6) {
+                    val keysToTry = listOf("pt100_$i", "sensor_$i", "sensor$i", "temp_$i")
+                    for (key in keysToTry) {
+                        if (json.has(key)) {
+                            val temp = json.getDouble(key).toFloat()
+                            val faultKey = "${key}_fault"
+                            val isFault = if (json.has(faultKey)) json.getBoolean(faultKey) else (temp < -40f || temp > 400f)
+
+                            tempMap[i] = temp
+                            faultMap[i] = isFault
+                            break
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse JSON string: '$jsonString'. Error: ${e.message}")
         }
-        return sensorMap
+
+        return SensorPacket(tempMap, faultMap)
     }
 }

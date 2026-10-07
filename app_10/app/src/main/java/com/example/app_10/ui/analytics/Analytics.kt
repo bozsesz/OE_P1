@@ -18,7 +18,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -26,8 +29,10 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -42,6 +47,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
@@ -53,6 +59,7 @@ data class Pt100SensorData(
     val id: Int,
     val name: String,
     val color: Color,
+    val isFaulty: Boolean,
     val temperatures: List<Float>
 )
 
@@ -72,20 +79,28 @@ fun AnalyticsScreen(
     sensorHistory: Map<Int, List<Float>> = mapOf(
         1 to listOf(22.5f, 35.0f, 48.2f, 62.0f, 75.5f, 88.0f, 94.2f),
         2 to listOf(18.0f, 24.5f, 31.0f, 40.2f, 49.8f, 58.4f, 65.0f),
-        3 to listOf(30.0f, 32.5f, 35.0f, 38.0f, 42.0f, 45.5f, 48.0f),
+        3 to emptyList(), // Sensor #3 faulty
         4 to listOf(15.0f, 28.0f, 45.0f, 65.0f, 82.0f, 98.5f, 112.0f),
         5 to listOf(25.0f, 27.0f, 29.5f, 31.0f, 33.2f, 36.0f, 38.5f),
         6 to listOf(40.0f, 42.0f, 48.0f, 56.5f, 68.0f, 80.2f, 91.0f)
-    )
+    ),
+    faultySensors: Set<Int> = setOf(3)
 ) {
-    var selectedSensorIds by remember { mutableStateOf(setOf(1, 2, 3, 4, 5, 6)) }
+    // Initial selection excludes any faulty sensors
+    val healthySensorIds = (1..6).filter { !faultySensors.contains(it) }.toSet()
+    var selectedSensorIds by remember { mutableStateOf(healthySensorIds) }
 
-    val activeSensorsList = (1..6).map { id ->
+    // Always ensure faulty sensors are excluded from active selection
+    val activeSelection = selectedSensorIds.filter { !faultySensors.contains(it) }.toSet()
+
+    val sensorsList = (1..6).map { id ->
+        val isFaulty = faultySensors.contains(id)
         Pt100SensorData(
             id = id,
             name = "PT100 #$id",
             color = sensorColors[(id - 1) % sensorColors.size],
-            temperatures = sensorHistory[id] ?: listOf(0f)
+            isFaulty = isFaulty,
+            temperatures = if (isFaulty) emptyList() else (sensorHistory[id] ?: listOf(0f))
         )
     }
 
@@ -107,7 +122,7 @@ fun AnalyticsScreen(
             // Left Panel: Controls & Selection
             Card(
                 modifier = Modifier
-                    .width(300.dp)
+                    .width(310.dp)
                     .fillMaxHeight(),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
@@ -123,13 +138,13 @@ fun AnalyticsScreen(
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
-                        text = "Select sensors to plot on the graph:",
+                        text = "Select healthy sensors to plot on graph:",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
 
-                    // Quick Select Buttons
+                    // Quick Select Buttons (only healthy sensors)
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -137,51 +152,57 @@ fun AnalyticsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
-                            onClick = { selectedSensorIds = setOf(1, 2, 3, 4, 5, 6) },
+                            onClick = { selectedSensorIds = healthySensorIds },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("All 6", fontSize = 12.sp)
+                            Text("All Healthy", fontSize = 11.sp)
                         }
                         OutlinedButton(
                             onClick = { selectedSensorIds = emptySet() },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("None", fontSize = 12.sp)
+                            Text("None", fontSize = 11.sp)
                         }
                     }
 
                     // Checkbox list for each sensor
-                    activeSensorsList.forEach { sensor ->
-                        val isSelected = selectedSensorIds.contains(sensor.id)
+                    sensorsList.forEach { sensor ->
+                        val isSelected = activeSelection.contains(sensor.id)
+                        val isEnabled = !sensor.isFaulty
+
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 4.dp)
-                                .clickable {
+                                .clickable(enabled = isEnabled) {
                                     selectedSensorIds = if (isSelected) {
-                                        selectedSensorIds - sensor.id
+                                        activeSelection - sensor.id
                                     } else {
-                                        selectedSensorIds + sensor.id
+                                        activeSelection + sensor.id
                                     }
                                 },
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Checkbox(
-                                checked = isSelected,
+                                checked = isSelected && isEnabled,
+                                enabled = isEnabled,
                                 onCheckedChange = { checked ->
                                     selectedSensorIds = if (checked) {
-                                        selectedSensorIds + sensor.id
+                                        activeSelection + sensor.id
                                     } else {
-                                        selectedSensorIds - sensor.id
+                                        activeSelection - sensor.id
                                     }
                                 },
-                                colors = CheckboxDefaults.colors(checkedColor = sensor.color)
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = sensor.color,
+                                    disabledCheckedColor = Color.Gray
+                                )
                             )
 
                             Box(
                                 modifier = Modifier
                                     .size(12.dp)
-                                    .background(sensor.color, shape = CircleShape)
+                                    .background(if (sensor.isFaulty) Color.Gray else sensor.color, shape = CircleShape)
                             )
 
                             Spacer(modifier = Modifier.width(8.dp))
@@ -189,15 +210,31 @@ fun AnalyticsScreen(
                             Text(
                                 text = sensor.name,
                                 style = MaterialTheme.typography.bodyMedium,
+                                color = if (sensor.isFaulty) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.weight(1f)
                             )
 
-                            val lastTemp = sensor.temperatures.lastOrNull() ?: 0f
-                            Text(
-                                text = "%.1f°C".format(lastTemp),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = if (isSelected) sensor.color else MaterialTheme.colorScheme.outline
-                            )
+                            if (sensor.isFaulty) {
+                                Surface(
+                                    color = Color(0xFFD32F2F),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "FAULTY",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            } else {
+                                val lastTemp = sensor.temperatures.lastOrNull() ?: 0f
+                                Text(
+                                    text = "%.1f°C".format(lastTemp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = if (isSelected) sensor.color else MaterialTheme.colorScheme.outline
+                                )
+                            }
                         }
                     }
                 }
@@ -227,40 +264,58 @@ fun AnalyticsScreen(
                             .padding(vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        activeSensorsList.forEach { sensor ->
-                            val isSelected = selectedSensorIds.contains(sensor.id)
+                        sensorsList.forEach { sensor ->
+                            val isSelected = activeSelection.contains(sensor.id)
+                            val isEnabled = !sensor.isFaulty
                             val lastTemp = sensor.temperatures.lastOrNull() ?: 0f
+
                             FilterChip(
-                                selected = isSelected,
+                                selected = isSelected && isEnabled,
+                                enabled = isEnabled,
                                 onClick = {
                                     selectedSensorIds = if (isSelected) {
-                                        selectedSensorIds - sensor.id
+                                        activeSelection - sensor.id
                                     } else {
-                                        selectedSensorIds + sensor.id
+                                        activeSelection + sensor.id
                                     }
                                 },
                                 label = {
-                                    Text("${sensor.name} (%.1f°C)".format(lastTemp))
+                                    if (sensor.isFaulty) {
+                                        Text("${sensor.name} [FAULTY]")
+                                    } else {
+                                        Text("${sensor.name} (%.1f°C)".format(lastTemp))
+                                    }
                                 },
                                 leadingIcon = {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(10.dp)
-                                            .background(sensor.color, CircleShape)
-                                    )
+                                    if (sensor.isFaulty) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = "Faulty",
+                                            tint = Color(0xFFD32F2F),
+                                            modifier = Modifier.size(12.dp)
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .background(sensor.color, CircleShape)
+                                        )
+                                    }
                                 },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = sensor.color.copy(alpha = 0.15f),
-                                    selectedLabelColor = sensor.color
+                                    selectedLabelColor = sensor.color,
+                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    disabledLabelColor = MaterialTheme.colorScheme.outline
                                 )
                             )
                         }
                     }
 
-                    // Canvas Graph
-                    val filteredSensors = activeSensorsList.filter { selectedSensorIds.contains(it.id) }
+                    // Canvas Graph (plot only selected & non-faulty sensors)
+                    val graphSensors = sensorsList.filter { activeSelection.contains(it.id) && !it.isFaulty }
                     Pt100GraphCanvas(
-                        sensors = filteredSensors,
+                        sensors = graphSensors,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)

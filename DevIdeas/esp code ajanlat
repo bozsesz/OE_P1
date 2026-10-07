@@ -1,0 +1,41 @@
+#include <WiFi.h>
+#include <WiFiUdp.h>
+
+const char* ssid     = "YOUR_WIFI_SSID";
+const char* password = "YOUR_WIFI_PASSWORD";
+
+WiFiUDP udp;
+const char* udpAddress = "255.255.255.255"; // Broadcast address
+const int udpPort = 5005;
+
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\nWiFi connected!");
+}
+
+void loop() {
+  // Read PT100 sensor values (replace with actual ADC / MAX31865 readings)
+  float pt100_1 = 25.4;
+  float pt100_2 = 32.1;
+  float pt100_3 = 41.8;
+
+  // Build JSON payload
+  char jsonBuffer[128];
+  snprintf(jsonBuffer, sizeof(jsonBuffer),
+           "{\"pt100_1\": %.2f, \"pt100_2\": %.2f, \"pt100_3\": %.2f}",
+           pt100_1, pt100_2, pt100_3);
+
+  // Broadcast UDP Packet over Wi-Fi
+  udp.beginPacket(udpAddress, udpPort);
+  udp.write((const uint8_t*)jsonBuffer, strlen(jsonBuffer));
+  udp.endPacket();
+
+  Serial.printf("Sent UDP Broadcast: %s\n", jsonBuffer);
+  delay(1000); // Broadcast every 1 second
+}

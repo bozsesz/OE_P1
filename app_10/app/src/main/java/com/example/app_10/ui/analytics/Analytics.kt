@@ -13,13 +13,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -55,26 +53,41 @@ data class Pt100SensorData(
     val id: Int,
     val name: String,
     val color: Color,
-    val temperatures: List<Float> // Temp in °C
+    val temperatures: List<Float>
 )
 
-// Sample sensor readings over 7 time intervals
-private val sampleSensors = listOf(
-    Pt100SensorData(1, "PT100 #1", Color(0xFFE53935), listOf(22.5f, 35.0f, 48.2f, 62.0f, 75.5f, 88.0f, 94.2f)),
-    Pt100SensorData(2, "PT100 #2", Color(0xFF1E88E5), listOf(18.0f, 24.5f, 31.0f, 40.2f, 49.8f, 58.4f, 65.0f)),
-    Pt100SensorData(3, "PT100 #3", Color(0xFF43A047), listOf(30.0f, 32.5f, 35.0f, 38.0f, 42.0f, 45.5f, 48.0f)),
-    Pt100SensorData(4, "PT100 #4", Color(0xFFFB8C00), listOf(15.0f, 28.0f, 45.0f, 65.0f, 82.0f, 98.5f, 112.0f)),
-    Pt100SensorData(5, "PT100 #5", Color(0xFF8E24AA), listOf(25.0f, 27.0f, 29.5f, 31.0f, 33.2f, 36.0f, 38.5f)),
-    Pt100SensorData(6, "PT100 #6", Color(0xFF00ACC1), listOf(40.0f, 42.0f, 48.0f, 56.5f, 68.0f, 80.2f, 91.0f))
+private val sensorColors = listOf(
+    Color(0xFFE53935),
+    Color(0xFF1E88E5),
+    Color(0xFF43A047),
+    Color(0xFFFB8C00),
+    Color(0xFF8E24AA),
+    Color(0xFF00ACC1)
 )
-
-private val timeLabels = listOf("0m", "5m", "10m", "15m", "20m", "25m", "30m")
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AnalyticsScreen(modifier: Modifier = Modifier) {
-    // Selected sensors state (by default all 6 sensors are selected)
+fun AnalyticsScreen(
+    modifier: Modifier = Modifier,
+    sensorHistory: Map<Int, List<Float>> = mapOf(
+        1 to listOf(22.5f, 35.0f, 48.2f, 62.0f, 75.5f, 88.0f, 94.2f),
+        2 to listOf(18.0f, 24.5f, 31.0f, 40.2f, 49.8f, 58.4f, 65.0f),
+        3 to listOf(30.0f, 32.5f, 35.0f, 38.0f, 42.0f, 45.5f, 48.0f),
+        4 to listOf(15.0f, 28.0f, 45.0f, 65.0f, 82.0f, 98.5f, 112.0f),
+        5 to listOf(25.0f, 27.0f, 29.5f, 31.0f, 33.2f, 36.0f, 38.5f),
+        6 to listOf(40.0f, 42.0f, 48.0f, 56.5f, 68.0f, 80.2f, 91.0f)
+    )
+) {
     var selectedSensorIds by remember { mutableStateOf(setOf(1, 2, 3, 4, 5, 6)) }
+
+    val activeSensorsList = (1..6).map { id ->
+        Pt100SensorData(
+            id = id,
+            name = "PT100 #$id",
+            color = sensorColors[(id - 1) % sensorColors.size],
+            temperatures = sensorHistory[id] ?: listOf(0f)
+        )
+    }
 
     Column(
         modifier = modifier
@@ -82,7 +95,7 @@ fun AnalyticsScreen(modifier: Modifier = Modifier) {
             .padding(16.dp)
     ) {
         Text(
-            text = "PT100 Temperature Sensors Analytics",
+            text = "PT100 Temperature Analytics (Wi-Fi Telemetry)",
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(bottom = 12.dp)
         )
@@ -138,7 +151,7 @@ fun AnalyticsScreen(modifier: Modifier = Modifier) {
                     }
 
                     // Checkbox list for each sensor
-                    sampleSensors.forEach { sensor ->
+                    activeSensorsList.forEach { sensor ->
                         val isSelected = selectedSensorIds.contains(sensor.id)
                         Row(
                             modifier = Modifier
@@ -179,8 +192,7 @@ fun AnalyticsScreen(modifier: Modifier = Modifier) {
                                 modifier = Modifier.weight(1f)
                             )
 
-                            // Latest temperature reading
-                            val lastTemp = sensor.temperatures.last()
+                            val lastTemp = sensor.temperatures.lastOrNull() ?: 0f
                             Text(
                                 text = "%.1f°C".format(lastTemp),
                                 style = MaterialTheme.typography.labelMedium,
@@ -215,8 +227,9 @@ fun AnalyticsScreen(modifier: Modifier = Modifier) {
                             .padding(vertical = 8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        sampleSensors.forEach { sensor ->
+                        activeSensorsList.forEach { sensor ->
                             val isSelected = selectedSensorIds.contains(sensor.id)
+                            val lastTemp = sensor.temperatures.lastOrNull() ?: 0f
                             FilterChip(
                                 selected = isSelected,
                                 onClick = {
@@ -227,7 +240,7 @@ fun AnalyticsScreen(modifier: Modifier = Modifier) {
                                     }
                                 },
                                 label = {
-                                    Text("${sensor.name} (${sensor.temperatures.last()}°C)")
+                                    Text("${sensor.name} (%.1f°C)".format(lastTemp))
                                 },
                                 leadingIcon = {
                                     Box(
@@ -245,9 +258,9 @@ fun AnalyticsScreen(modifier: Modifier = Modifier) {
                     }
 
                     // Canvas Graph
-                    val activeSensors = sampleSensors.filter { selectedSensorIds.contains(it.id) }
+                    val filteredSensors = activeSensorsList.filter { selectedSensorIds.contains(it.id) }
                     Pt100GraphCanvas(
-                        sensors = activeSensors,
+                        sensors = filteredSensors,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -271,7 +284,6 @@ fun Pt100GraphCanvas(
         fontSize = 11.sp
     )
 
-    // Temperature bounds
     val minTemp = 0f
     val maxTemp = 120f
     val tempStep = 20f
@@ -296,7 +308,6 @@ fun Pt100GraphCanvas(
             val tempValue = minTemp + (i * tempStep)
             val y = height - paddingBottom - (i.toFloat() / steps * graphHeight)
 
-            // Grid line
             drawLine(
                 color = gridColor,
                 start = Offset(paddingLeft, y),
@@ -304,7 +315,6 @@ fun Pt100GraphCanvas(
                 strokeWidth = 1.dp.toPx()
             )
 
-            // Y-Label
             val labelText = "${tempValue.toInt()}°C"
             val textLayoutResult = textMeasurer.measure(labelText, labelStyle)
             drawText(
@@ -313,47 +323,30 @@ fun Pt100GraphCanvas(
             )
         }
 
-        // 2. Draw Vertical Grid Lines & X-Axis Time Labels
-        val totalPoints = timeLabels.size
-        for (i in 0 until totalPoints) {
-            val x = paddingLeft + (i.toFloat() / (totalPoints - 1) * graphWidth)
-
-            // Grid line
-            drawLine(
-                color = gridColor,
-                start = Offset(x, paddingTop),
-                end = Offset(x, height - paddingBottom),
-                strokeWidth = 1.dp.toPx()
-            )
-
-            // X-Label
-            val timeText = timeLabels[i]
-            val textLayoutResult = textMeasurer.measure(timeText, labelStyle)
-            drawText(
-                textLayoutResult = textLayoutResult,
-                topLeft = Offset(x - (textLayoutResult.size.width / 2), height - paddingBottom + 6.dp.toPx())
-            )
-        }
-
-        // 3. Draw Sensor Temperature Paths
+        // 2. Draw Sensor Temperature Paths
         sensors.forEach { sensor ->
-            if (sensor.temperatures.isNotEmpty()) {
+            val points = sensor.temperatures
+            if (points.isNotEmpty()) {
                 val path = Path()
+                val totalPoints = points.size
 
-                sensor.temperatures.forEachIndexed { index, temp ->
-                    val x = paddingLeft + (index.toFloat() / (totalPoints - 1) * graphWidth)
-                    val normalizedY = (temp - minTemp) / (maxTemp - minTemp)
+                points.forEachIndexed { index, temp ->
+                    val x = if (totalPoints > 1) {
+                        paddingLeft + (index.toFloat() / (totalPoints - 1) * graphWidth)
+                    } else {
+                        paddingLeft + (graphWidth / 2f)
+                    }
+                    val normalizedY = (temp.coerceIn(minTemp, maxTemp) - minTemp) / (maxTemp - minTemp)
                     val y = height - paddingBottom - (normalizedY * graphHeight)
 
                     if (index == 0) {
                         path.moveTo(x, y)
                     } else {
                         val prevX = paddingLeft + ((index - 1).toFloat() / (totalPoints - 1) * graphWidth)
-                        val prevTemp = sensor.temperatures[index - 1]
-                        val prevNormalizedY = (prevTemp - minTemp) / (maxTemp - minTemp)
+                        val prevTemp = points[index - 1]
+                        val prevNormalizedY = (prevTemp.coerceIn(minTemp, maxTemp) - minTemp) / (maxTemp - minTemp)
                         val prevY = height - paddingBottom - (prevNormalizedY * graphHeight)
 
-                        // Cubic Bezier curve for smooth temperature trend lines
                         val controlX1 = prevX + (x - prevX) / 2f
                         val controlY1 = prevY
                         val controlX2 = prevX + (x - prevX) / 2f
@@ -362,7 +355,6 @@ fun Pt100GraphCanvas(
                         path.cubicTo(controlX1, controlY1, controlX2, controlY2, x, y)
                     }
 
-                    // Draw data point dots
                     drawCircle(
                         color = sensor.color,
                         radius = 4.dp.toPx(),
@@ -370,7 +362,6 @@ fun Pt100GraphCanvas(
                     )
                 }
 
-                // Draw sensor line
                 drawPath(
                     path = path,
                     color = sensor.color,

@@ -9,7 +9,7 @@
 #include <lwip/netdb.h>
 #include "wifi_credentials.h"
 
-#define UDP_PORT 4210 // A Node-RED udp in portja
+#define UDP_PORT 5005 // Android app port-ja
 
 static const char *TAG = "WIFI_MANAGER";
 static int s_udp_socket = -1;
@@ -53,7 +53,7 @@ static void init_udp_socket(void)
     int broadcast_permission = 1;
     setsockopt(s_udp_socket, SOL_SOCKET, SO_BROADCAST, (void *)&broadcast_permission, sizeof(broadcast_permission));
 
-    // Célcím beállítása (255.255.255.255:4210)
+    // Célcím beállítása (255.255.255.255:5005)
     memset(&s_dest_addr, 0, sizeof(s_dest_addr));
     s_dest_addr.sin_family = AF_INET;
     s_dest_addr.sin_port = htons(UDP_PORT);

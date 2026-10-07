@@ -15,7 +15,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Devices
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.app_10.ui.MainTabletApp
+import com.example.app_10.ui.theme.App_10Theme
 
 @Composable
 fun DashBoardScreen(modifier: Modifier = Modifier) {
@@ -51,11 +55,11 @@ fun DashBoardScreen(modifier: Modifier = Modifier) {
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Metric #${index + 1}",
+                            text = "PT100 #${index + 1}",
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = "${(index + 1) * 1284}",
+                            text = "sensor value",
                             style = MaterialTheme.typography.headlineSmall,
                             color = MaterialTheme.colorScheme.primary
                         )
@@ -63,5 +67,13 @@ fun DashBoardScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+}
+
+@Preview(name = "Tablet View", device = Devices.TABLET, showBackground = true)
+@Composable
+fun DashBoardPreview() {
+    App_10Theme {
+        DashBoardScreen()
     }
 }

@@ -6,6 +6,7 @@
 #include "esp_netif.h"
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
+#include "lwip/inet.h"
 #include <lwip/netdb.h>
 #include "wifi_credentials.h"
 
@@ -39,7 +40,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
     }
 }
 
-// UDP Socket előkészítése broadcast küldésre
+// UDP Socket előkészítése unicast küldésre
 static void init_udp_socket(void)
 {
     s_udp_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
@@ -49,15 +50,11 @@ static void init_udp_socket(void)
         return;
     }
 
-    // Broadcast engedélyezése a socketen
-    int broadcast_permission = 1;
-    setsockopt(s_udp_socket, SOL_SOCKET, SO_BROADCAST, (void *)&broadcast_permission, sizeof(broadcast_permission));
-
-    // Célcím beállítása (255.255.255.255:5005)
+    // Célcím beállítása (tablet IP:5005)
     memset(&s_dest_addr, 0, sizeof(s_dest_addr));
     s_dest_addr.sin_family = AF_INET;
     s_dest_addr.sin_port = htons(UDP_PORT);
-    s_dest_addr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+    s_dest_addr.sin_addr.s_addr = inet_addr(TABLET_IP);
 }
 
 esp_err_t wifi_manager_init(void)
@@ -97,7 +94,7 @@ esp_err_t wifi_manager_init(void)
     return ESP_OK;
 }
 
-// Tetszőleges szöveges (JSON) adat kiküldése UDP Broadcast-on
+// Tetszőleges szöveges (JSON) adat kiküldése UDP Unicast-on
 esp_err_t wifi_manager_send_json(const char *json_string)
 {
     if (!s_connected)
@@ -120,6 +117,6 @@ esp_err_t wifi_manager_send_json(const char *json_string)
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "UDP csomag sikeresen elküldve (255.255.255.255:%d)", UDP_PORT);
+    ESP_LOGI(TAG, "UDP csomag elküldve a tabletnek a %s:%d címre", TABLET_IP, UDP_PORT);
     return ESP_OK;
 }

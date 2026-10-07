@@ -75,7 +75,7 @@ void app_main(void)
                  faults[2] ? "true" : "false",
                  faults[3] ? "true" : "false");
 
-        // 5. Adatküldés UDP Broadcast-al (255.255.255.255:4210)
+        // 5. Adatküldés UDP Broadcast-al (255.255.255.255:5005)
         wifi_manager_send_json(json_payload);
 
         vTaskDelay(pdMS_TO_TICKS(2000));

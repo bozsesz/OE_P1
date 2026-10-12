@@ -10,11 +10,12 @@ import kotlinx.coroutines.flow.flowOn
 import org.json.JSONObject
 import java.net.DatagramPacket
 import java.net.DatagramSocket
-import java.net.InetSocketAddress
 
 data class SensorPacket(
     val temperatures: Map<Int, Float>,
-    val faults: Map<Int, Boolean>
+    val faults: Map<Int, Boolean>,
+    val rawJson: String = "",
+    val senderIp: String = ""
 )
 
 class Esp32UdpReceiver(
@@ -30,6 +31,7 @@ class Esp32UdpReceiver(
     fun listenForSensorData(): Flow<SensorPacket> = flow {
         var socket: DatagramSocket? = null
         var multicastLock: WifiManager.MulticastLock? = null
+        var wifiLock: WifiManager.WifiLock? = null
 
         try {
             val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
@@ -38,11 +40,16 @@ class Esp32UdpReceiver(
                 acquire()
             }
 
-            socket = DatagramSocket(null).apply {
-                reuseAddress = true
-                bind(InetSocketAddress(port))
+            wifiLock = wifiManager?.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "Esp32WifiLock")?.apply {
+                setReferenceCounted(false)
+                acquire()
             }
-            Log.d(TAG, "Listening for ESP32 UDP Broadcast packets on port $port")
+
+            socket = DatagramSocket(port).apply {
+                reuseAddress = true
+                broadcast = true
+            }
+            Log.d(TAG, "Socket successfully bound to port $port (local address: ${socket.localAddress})")
 
             val buffer = ByteArray(2048)
 
@@ -54,15 +61,19 @@ class Esp32UdpReceiver(
                 Log.d(TAG, "Received packet from ${packet.address.hostAddress}: $jsonString")
 
                 val sensorPacket = parseEsp32Json(jsonString)
-                if (sensorPacket.temperatures.isNotEmpty()) {
-                    emit(sensorPacket)
-                }
+                emit(sensorPacket.copy(
+                    rawJson = jsonString,
+                    senderIp = packet.address.hostAddress ?: ""
+                ))
             }
         } catch (e: Exception) {
             Log.e(TAG, "UDP Socket error: ${e.localizedMessage}", e)
         } finally {
             try {
                 multicastLock?.let {
+                    if (it.isHeld) it.release()
+                }
+                wifiLock?.let {
                     if (it.isHeld) it.release()
                 }
                 socket?.close()
@@ -104,8 +115,18 @@ class Esp32UdpReceiver(
                 for (i in 0 until tempsArray.length()) {
                     val sensorId = startOffset + i
                     if (sensorId in 1..6) {
-                        val temp = tempsArray.getDouble(i).toFloat()
-                        val isFault = faultsArray?.optBoolean(i, false) ?: (temp < -40f || temp > 400f)
+                        val temp = tempsArray.optDouble(i, 0.0).toFloat()
+                        val isFault = when {
+                            faultsArray != null && !faultsArray.isNull(i) -> {
+                                val fObj = faultsArray.get(i)
+                                when (fObj) {
+                                    is Boolean -> fObj
+                                    is String -> fObj.lowercase() == "true"
+                                    else -> false
+                                }
+                            }
+                            else -> temp < -40f || temp > 400f
+                        }
 
                         tempMap[sensorId] = temp
                         faultMap[sensorId] = isFault
@@ -131,7 +152,7 @@ class Esp32UdpReceiver(
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse JSON string: '$jsonString'. Error: ${e.message}")
+            Log.e(TAG, "Failed to parse JSON string: '$jsonString'", e)
         }
 
         return SensorPacket(tempMap, faultMap)

@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -53,7 +54,11 @@ fun DashBoardScreen(
     ),
     faultySensors: Set<Int> = setOf(3),
     onToggleFault: (Int) -> Unit = {},
-    connectionStatus: String = "Listening on Wi-Fi (UDP Port 5005)"
+    connectionStatus: String = "Listening on Wi-Fi (UDP Port 5005)",
+    lastReceivedMessage: String = "",
+    packetCount: Int = 0,
+    tabletIp: String = "Unknown",
+    onSendTestPacket: () -> Unit = {}
 ) {
     val healthyCount = (1..6).count { !faultySensors.contains(it) }
     val faultyCount = (1..6).count { faultySensors.contains(it) }
@@ -63,6 +68,88 @@ fun DashBoardScreen(
             .fillMaxSize()
             .padding(16.dp)
     ) {
+        // Prominent Debug Card for UDP Telemetry
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "UDP Telemetry Monitor (Port 5005)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Surface(
+                        color = if (packetCount > 0) Color(0xFF388E3C) else Color(0xFFD32F2F),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = if (packetCount > 0) "PACKETS: $packetCount" else "WAITING...",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Tablet IP: $tabletIp (Port 5005)",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Text(
+                    text = "Status: $connectionStatus",
+                    style = MaterialTheme.typography.bodySmall
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Last Raw JSON:",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 2.dp)
+                ) {
+                    Text(
+                        text = if (lastReceivedMessage.isNotBlank()) lastReceivedMessage else "No UDP packet received yet on port 5005...",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(6.dp),
+                        color = if (lastReceivedMessage.isNotBlank()) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = onSendTestPacket,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Test Local UDP Self-Test")
+                }
+            }
+        }
         // Network & Sensor Status Banner
         Surface(
             color = if (faultyCount > 0) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
@@ -71,35 +158,48 @@ fun DashBoardScreen(
                 .fillMaxWidth()
                 .padding(bottom = 16.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            Column(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(if (faultyCount > 0) Color(0xFFD32F2F) else Color(0xFF4CAF50), CircleShape)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Wi-Fi Telemetry: $connectionStatus",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (faultyCount > 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(if (faultyCount > 0) Color(0xFFD32F2F) else Color(0xFF4CAF50), CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Wi-Fi Telemetry: $connectionStatus",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (faultyCount > 0) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+
+                    Surface(
+                        color = if (faultyCount > 0) Color(0xFFD32F2F) else Color(0xFF388E3C),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = if (faultyCount > 0) "$healthyCount OK • $faultyCount FAULTY" else "6 / 6 ALL SENSORS OK",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
-                Surface(
-                    color = if (faultyCount > 0) Color(0xFFD32F2F) else Color(0xFF388E3C),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
+                if (lastReceivedMessage.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = if (faultyCount > 0) "$healthyCount OK • $faultyCount FAULTY" else "6 / 6 ALL SENSORS OK",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        fontWeight = FontWeight.Bold
+                        text = "Last RX: $lastReceivedMessage",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (faultyCount > 0) MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                     )
                 }
             }
@@ -116,7 +216,9 @@ fun DashBoardScreen(
             contentPadding = PaddingValues(0.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
         ) {
             items(6) { index ->
                 val sensorId = index + 1

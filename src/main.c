@@ -58,7 +58,7 @@ void app_main(void)
             }
         }
 
-        ESP_LOGI(TAG, "Lefutott az egesz inti ciklus...");
+        ESP_LOGI(TAG, "Lefutott az egesz init ciklus...");
         wifi_manager_send_json("{\"status\":\"ALIVE\"}");
 
         // 4. JSON formátumú üzenet összeállítása az UDP küldéshez

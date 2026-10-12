@@ -1,6 +1,7 @@
 package com.example.app_10.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.app_10.data.Esp32UdpReceiver
@@ -46,6 +47,30 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
     private val _connectionStatus = MutableStateFlow("Listening on Wi-Fi (UDP Port 5005)")
     val connectionStatus: StateFlow<String> = _connectionStatus.asStateFlow()
 
+    private val _lastReceivedMessage = MutableStateFlow<String>("")
+    val lastReceivedMessage: StateFlow<String> = _lastReceivedMessage.asStateFlow()
+
+    private val _packetCount = MutableStateFlow<Int>(0)
+    val packetCount: StateFlow<Int> = _packetCount.asStateFlow()
+
+    val tabletIp: String = run {
+        try {
+            val wm = application.applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+            val ip = wm?.connectionInfo?.ipAddress ?: 0
+            if (ip != 0) {
+                String.format(
+                    "%d.%d.%d.%d",
+                    ip and 0xff,
+                    ip shr 8 and 0xff,
+                    ip shr 16 and 0xff,
+                    ip shr 24 and 0xff
+                )
+            } else "Unknown"
+        } catch (e: Exception) {
+            "Unknown"
+        }
+    }
+
     init {
         startListening()
     }
@@ -86,9 +111,16 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
             udpReceiver.listenForSensorData().collect { packet ->
                 val incomingTemps = packet.temperatures
                 val incomingFaults = packet.faults
+                val rawJson = packet.rawJson
+                val senderIp = packet.senderIp
+
+                if (rawJson.isNotBlank()) {
+                    _lastReceivedMessage.value = "[$senderIp] $rawJson"
+                    _packetCount.value = _packetCount.value + 1
+                }
 
                 if (incomingTemps.isNotEmpty()) {
-                    _connectionStatus.value = "Active Wi-Fi Broadcast Received (${incomingTemps.size} Sensors)"
+                    _connectionStatus.value = "Active Unicast Received from $senderIp (${incomingTemps.size} Sensors)"
 
                     val updatedReadings = _sensorReadings.value.toMutableMap()
                     val updatedFaults = _faultySensors.value.toMutableSet()
@@ -118,6 +150,26 @@ class SensorViewModel(application: Application) : AndroidViewModel(application) 
                     }
                     _sensorHistory.value = updatedHistory
                 }
+            }
+        }
+    }
+
+    /**
+     * PoC self-test: Sends a UDP packet locally to 127.0.0.1:5005 to prove UDP reception works.
+     */
+    fun sendTestPacket() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val socket = java.net.DatagramSocket()
+                val testJson = "{\"dev\":\"ESP32_C3_01\",\"temps\":[22.50,18.00,32.50,15.00],\"faults\":[false,false,false,false]}"
+                val buffer = testJson.toByteArray(Charsets.UTF_8)
+                val targetAddress = java.net.InetAddress.getByName("127.0.0.1")
+                val packet = java.net.DatagramPacket(buffer, buffer.size, targetAddress, 5005)
+                socket.send(packet)
+                socket.close()
+                Log.d("SensorViewModel", "Sent test UDP packet to localhost:5005")
+            } catch (e: Exception) {
+                Log.e("SensorViewModel", "Failed to send test packet: ${e.message}", e)
             }
         }
     }

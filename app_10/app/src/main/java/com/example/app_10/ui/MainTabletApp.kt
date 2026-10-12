@@ -43,6 +43,8 @@ fun MainTabletApp(
     val faultySensors by viewModel.faultySensors.collectAsState()
     val sensorHistory by viewModel.sensorHistory.collectAsState()
     val connectionStatus by viewModel.connectionStatus.collectAsState()
+    val lastReceivedMessage by viewModel.lastReceivedMessage.collectAsState()
+    val packetCount by viewModel.packetCount.collectAsState()
 
     MainTabletAppContent(
         modifier = modifier,
@@ -50,7 +52,11 @@ fun MainTabletApp(
         faultySensors = faultySensors,
         sensorHistory = sensorHistory,
         connectionStatus = connectionStatus,
-        onToggleFault = { sensorId -> viewModel.toggleSensorFault(sensorId) }
+        lastReceivedMessage = lastReceivedMessage,
+        packetCount = packetCount,
+        tabletIp = viewModel.tabletIp,
+        onToggleFault = { sensorId -> viewModel.toggleSensorFault(sensorId) },
+        onSendTestPacket = { viewModel.sendTestPacket() }
     )
 }
 
@@ -71,7 +77,11 @@ fun MainTabletAppContent(
         6 to listOf(40.0f, 42.0f, 48.0f, 56.5f, 68.0f, 80.2f, 91.0f)
     ),
     connectionStatus: String = "Listening on Wi-Fi (UDP Port 5005)",
-    onToggleFault: (Int) -> Unit = {}
+    lastReceivedMessage: String = "",
+    packetCount: Int = 0,
+    tabletIp: String = "Unknown",
+    onToggleFault: (Int) -> Unit = {},
+    onSendTestPacket: () -> Unit = {}
 ) {
     var currentScreen by rememberSaveable { mutableStateOf(AppScreen.MAIN_MENU) }
 
@@ -124,6 +134,10 @@ fun MainTabletAppContent(
                     faultySensors = faultySensors,
                     onToggleFault = onToggleFault,
                     connectionStatus = connectionStatus,
+                    lastReceivedMessage = lastReceivedMessage,
+                    packetCount = packetCount,
+                    tabletIp = tabletIp,
+                    onSendTestPacket = onSendTestPacket,
                     modifier = contentModifier
                 )
             }

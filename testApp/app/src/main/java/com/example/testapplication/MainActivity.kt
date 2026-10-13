@@ -716,7 +716,7 @@ fun UdpReceiverAppPreview() {
 
     val sampleMessages = listOf(
         UdpMessage(
-            senderIp = "192.168.1.105",
+            senderIp = "192.168.13.105",
             senderPort = 5005,
             rawJson = sampleJson
         )
@@ -725,7 +725,7 @@ fun UdpReceiverAppPreview() {
     TestApplicationTheme {
         UdpReceiverAppContent(
             isListening = true,
-            localIp = "192.168.1.150",
+            localIp = "192.168.13.150",
             receivedCount = 1,
             messages = sampleMessages
         )
@@ -738,7 +738,7 @@ fun EmptyStatePreview() {
     TestApplicationTheme {
         UdpReceiverAppContent(
             isListening = true,
-            localIp = "192.168.1.150",
+            localIp = "192.168.13.150",
             receivedCount = 0,
             messages = emptyList()
         )
